@@ -4,7 +4,7 @@ type ModeBadgeProps = {
 };
 
 export default function ModeBadge({ label, variant = "primary" }: ModeBadgeProps) {
-  const base = "px-3 py-1 text-sm rounded-full inline-flex items-center gap-2";
-  const styles = variant === "primary" ? "bg-blue-100 text-blue-800" : "bg-slate-200 text-slate-700";
+  const base = "px-4 py-1.5 text-sm rounded-full inline-flex items-center gap-2 font-semibold shadow-sm";
+  const styles = variant === "primary" ? "bg-blue-600 text-white" : "bg-slate-700 text-white/90";
   return <span className={`${base} ${styles}`}>{label}</span>;
 }
