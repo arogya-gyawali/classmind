@@ -1,3 +1,4 @@
+"use client";
 import { useState } from "react";
 import CitationBlock from "@/components/CitationBlock";
 
@@ -6,7 +7,8 @@ export default function StudentPage() {
   const sampleCitation = {
     material: "Lecture_01_Trees.pdf",
     page: 12,
-    snippet: "Balanced trees maintain height O(log n) which ensures operations are efficient."
+    snippet:
+      "Balanced trees maintain height O(log n) which ensures operations are efficient.",
   };
 
   return (
@@ -16,7 +18,9 @@ export default function StudentPage() {
       <div className="space-y-4">
         <div className="bg-white p-4 rounded shadow">
           <div className="text-slate-700">Guided hint: consider tree balance properties.</div>
-          <div className="mt-2"><CitationBlock cite={sampleCitation} /></div>
+          <div className="mt-2">
+            <CitationBlock cite={sampleCitation} />
+          </div>
         </div>
       </div>
 
@@ -27,10 +31,7 @@ export default function StudentPage() {
           onChange={(e) => setInput(e.target.value)}
           placeholder="Ask about the course material..."
         />
-        <button
-          onClick={() => { setInput(""); }}
-          className="px-4 py-2 bg-blue-800 text-white rounded"
-        >
+        <button onClick={() => setInput("")} className="px-4 py-2 bg-blue-800 text-white rounded">
           Send
         </button>
       </div>
