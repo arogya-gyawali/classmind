@@ -1,66 +1,151 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 type Uploaded = { name: string; pages?: number; chunks: number; status: "processing" | "indexed" };
 
 export default function UploadArea({ onIndexed }: { onIndexed?: (u: Uploaded) => void }) {
+  const [dragActive, setDragActive] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [lastIndexed, setLastIndexed] = useState<string | null>(null);
   const [processing, setProcessing] = useState<null | { name: string; progress: number }>(null);
+  const intervalRef = useRef<number | null>(null);
+  const busy = Boolean(processing);
+
+  const stageLabel = useMemo(() => {
+    if (!processing) return null;
+    if (processing.progress < 35) return "Parsing file";
+    if (processing.progress < 70) return "Chunking content";
+    return "Indexing vectors";
+  }, [processing]);
+
+  useEffect(() => {
+    return () => {
+      if (intervalRef.current !== null) {
+        window.clearInterval(intervalRef.current);
+      }
+    };
+  }, []);
 
   function mockChunkCount(pages: number) {
-    // rough heuristic: ~ (pages * 50) / 800-chunk-size ≈ pages * 0.0625 -> scale for demo
     return Math.max(5, Math.round(pages * 6.5));
   }
 
+  function estimatePages(name: string) {
+    const match = name.match(/\d+/)?.[0];
+    return Math.max(5, Math.min(120, Math.round(match ? Number(match) : Math.random() * 40)));
+  }
+
+  function validateFile(file: File) {
+    const validMime = file.type === "application/pdf";
+    const validName = file.name.toLowerCase().endsWith(".pdf");
+    return validMime || validName;
+  }
+
   function handleFile(file?: File) {
-    if (!file) return;
+    if (!file || busy) return;
+    setError(null);
+    setLastIndexed(null);
+
+    if (!validateFile(file)) {
+      setError("Only PDF files are supported.");
+      return;
+    }
+
     const name = file.name;
-    // estimate pages by filename hint or random for demo
-    const pages = Math.max(5, Math.min(120, Math.round((name.match(/\d+/)?.[0] ? Number(name.match(/\d+/)?.[0]) : Math.random()*40))));
+    const pages = estimatePages(name);
     setProcessing({ name, progress: 0 });
 
-    // simulate processing progress
     const start = Date.now();
-    const interval = setInterval(() => {
-      setProcessing((p) => {
-        if (!p) return p;
+    intervalRef.current = window.setInterval(() => {
+      setProcessing((current) => {
+        if (!current) return current;
         const elapsed = Date.now() - start;
-        const prog = Math.min(100, Math.round((elapsed / 1500) * 100)); // ~1.5s
-        if (prog >= 100) {
-          clearInterval(interval);
+        const progress = Math.min(100, Math.round((elapsed / 1600) * 100));
+        if (progress >= 100) {
+          if (intervalRef.current !== null) {
+            window.clearInterval(intervalRef.current);
+          }
           const chunks = mockChunkCount(pages);
-          const uploaded = { name: p.name, pages, chunks, status: "indexed" as const };
+          const uploaded = { name: current.name, pages, chunks, status: "indexed" as const };
+          setLastIndexed(current.name);
           setProcessing(null);
-          onIndexed && onIndexed(uploaded);
+          onIndexed?.(uploaded);
+          return null;
         }
-        return { ...p, progress: prog };
+        return { ...current, progress };
       });
     }, 120);
   }
 
   return (
-    <div>
+    <div className="space-y-2.5 md:space-y-3">
       <label className="block">
-        <div className="border-2 border-dashed border-slate-200 bg-white p-6 rounded-md text-center hover:border-slate-300 cursor-pointer">
+        <div
+          className={`rounded-2xl border-2 border-dashed p-5 text-center md:p-6 ${dragActive ? "border-[var(--brand)] bg-sky-50" : "border-slate-300 bg-white"} ${busy ? "cursor-not-allowed opacity-70" : ""}`}
+          aria-busy={busy}
+          onDragEnter={(e) => {
+            e.preventDefault();
+            if (busy) return;
+            setDragActive(true);
+          }}
+          onDragLeave={(e) => {
+            e.preventDefault();
+            if (busy) return;
+            setDragActive(false);
+          }}
+          onDragOver={(e) => {
+            e.preventDefault();
+            if (busy) return;
+            setDragActive(true);
+          }}
+          onDrop={(e) => {
+            e.preventDefault();
+            if (busy) return;
+            setDragActive(false);
+            handleFile(e.dataTransfer.files?.[0]);
+          }}
+        >
           <input
             type="file"
             accept=".pdf"
             className="hidden"
-            onChange={(e) => handleFile(e.target.files ? e.target.files[0] : undefined)}
+            aria-label="Upload PDF material"
+            disabled={busy}
+            onChange={(e) => handleFile(e.target.files?.[0])}
           />
-          <div className="text-slate-700 font-medium">Drag & drop a PDF here, or click to select</div>
-          <div className="text-sm text-slate-500 mt-2">Professor uploads course materials (PDF only)</div>
+          <div className="font-medium text-slate-800">Drop a PDF here, or click to choose a file</div>
+          <div className="mt-2 text-sm text-slate-600">Course materials stay source-locked for student responses.</div>
+          <span className="mt-4 inline-flex rounded-lg bg-[var(--brand)] px-3 py-1.5 text-xs font-semibold text-white shadow-sm">
+            {busy ? "Processing..." : "Choose PDF"}
+          </span>
+          <div className="mt-2 text-xs text-slate-500">Supported format: PDF</div>
         </div>
       </label>
 
       {processing && (
-        <div className="mt-3 p-3 bg-white border rounded-md">
-          <div className="flex justify-between items-center">
-            <div className="text-sm text-slate-700">Processing: <strong>{processing.name}</strong></div>
-            <div className="text-xs text-slate-500">{processing.progress}%</div>
+        <div className="animate-reveal rounded-xl border border-slate-200 bg-white p-3" role="status" aria-live="polite">
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-sm text-slate-700">
+              Indexing <strong>{processing.name}</strong>
+            </div>
+            <div className="text-xs font-medium text-slate-500">{processing.progress}%</div>
           </div>
-          <div className="mt-2 w-full bg-slate-100 h-2 rounded">
-            <div style={{width: `${processing.progress}%`}} className="h-2 rounded bg-blue-500 transition-all" />
+          <div className="mt-1 text-xs text-slate-500">{stageLabel}</div>
+          <div className="mt-2 h-2 w-full rounded-full bg-slate-100">
+            <div style={{ width: `${processing.progress}%` }} className="h-2 rounded-full bg-[var(--brand)] transition-all duration-150" />
           </div>
+        </div>
+      )}
+
+      {lastIndexed && (
+        <div className="animate-reveal rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900" role="status" aria-live="polite">
+          Indexed successfully: <strong>{lastIndexed}</strong>
+        </div>
+      )}
+
+      {error && (
+        <div className="animate-reveal rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800" role="alert">
+          {error}
         </div>
       )}
     </div>

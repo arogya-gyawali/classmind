@@ -8,31 +8,37 @@ type Props = {
 
 export default function ModeToggle({ mode, setMode }: Props) {
   return (
-    <div className="inline-flex items-center bg-slate-100 rounded-full p-1 border border-slate-200">
+    <div
+      className="inline-flex items-center rounded-full border border-slate-300 bg-slate-100 p-1"
+      role="group"
+      aria-label="Response mode"
+    >
       <button
         onClick={() => setMode("guided")}
         aria-pressed={mode === "guided"}
+        aria-label="Switch to guided learning mode"
         className={
-          "px-4 py-1 rounded-full text-sm font-medium transition " +
+          "rounded-full px-3 py-1.5 text-sm font-semibold transition md:px-4 " +
           (mode === "guided"
-            ? "bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-sm"
+            ? "bg-[var(--brand)] text-white shadow-sm"
             : "text-slate-700 hover:bg-slate-200")
         }
       >
-        🧠 Guided
+        Guided
       </button>
 
       <button
         onClick={() => setMode("direct")}
         aria-pressed={mode === "direct"}
+        aria-label="Switch to direct answer mode"
         className={
-          "ml-1 px-4 py-1 rounded-full text-sm font-medium transition " +
+          "ml-1 rounded-full px-3 py-1.5 text-sm font-semibold transition md:px-4 " +
           (mode === "direct"
-            ? "bg-gradient-to-r from-purple-600 to-purple-500 text-white shadow-sm"
+            ? "bg-[var(--accent)] text-white shadow-sm"
             : "text-slate-700 hover:bg-slate-200")
         }
       >
-        📝 Direct
+        Direct
       </button>
     </div>
   );
