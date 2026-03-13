@@ -1,92 +1,144 @@
 # ClassMind
 
-Local-first professor-controlled AI learning platform.
+**AI teaching assistant that answers student questions using only professor-approved course materials — no hallucinations, no off-topic responses.**
 
-## 🚀 What It Does
-- Professors upload PDFs (source of truth)
-- AI answers using ONLY uploaded materials
-- AI refuses questions outside course content
-- Guided Learning (Socratic) or Direct Answer mode
+Built at the ThinkNext Hackathon 2026. ClassMind gives professors full control over what their students' AI assistant knows, by restricting all responses to uploaded lecture PDFs using Retrieval-Augmented Generation (RAG).
 
-## 🛠 Tech Stack
-- Frontend: Next.js + Tailwind
-- Backend: FastAPI + SQLite auth + JWT
-- Vector DB: ChromaDB
-- LLM runtime: Ollama (local)
+---
 
-## 🎯 Hackathon Goal
-Build a controlled AI assistant that improves learning without hallucination.
+## The problem
 
-## Local Setup
-1. Backend setup:
+General-purpose AI tools like ChatGPT hallucinate, go off-syllabus, and give students answers the professor never taught. Professors can't trust them in the classroom, and students can't verify whether the AI's response matches course content.
+
+## What ClassMind does
+
+- Professors upload course PDFs (lectures, readings, slides) — this becomes the AI's only source of truth
+- Students ask questions and get answers grounded strictly in uploaded materials
+- If a question falls outside the course content, the AI says so instead of guessing
+- Two learning modes: **Guided (Socratic)** prompts students to think through the answer, **Direct** gives the answer with source references
+- Role-based access: only professors can upload and ingest materials; students can only chat
+
+## How it works
+
+```
+Professor uploads PDF
+        ↓
+Document chunked + embedded (Ollama)
+        ↓
+Vectors stored in ChromaDB
+        ↓
+Student asks a question
+        ↓
+Relevant chunks retrieved via similarity search
+        ↓
+Local LLM generates answer from retrieved context only
+        ↓
+Response returned with source grounding
+```
+
+The system enforces hallucination prevention at the retrieval layer — the LLM only sees relevant chunks from indexed PDFs, never its own parametric knowledge. If no relevant chunks are found, the system refuses to answer rather than fabricate.
+
+## Tech stack
+
+| Layer | Technology |
+|-------|-----------|
+| Frontend | Next.js, Tailwind CSS, TypeScript |
+| Backend | FastAPI, Python |
+| Auth | SQLite + JWT (role-based: student/teacher) |
+| Vector DB | ChromaDB (persistent, local) |
+| LLM | Ollama (runs locally — no API keys, no data leaves the machine) |
+| Embedding | Ollama embedding models |
+
+## Design decisions
+
+**Why Ollama instead of OpenAI API?** Privacy-first. Course materials are intellectual property — they shouldn't be sent to third-party servers. Running the LLM locally means zero data leakage. This also makes ClassMind deployable in air-gapped university environments.
+
+**Why ChromaDB instead of Pinecone/Weaviate?** Same reason — local-first. ChromaDB runs as a persistent local store with no cloud dependency. For a single-course deployment, it handles the scale easily and keeps the entire stack self-contained.
+
+**Why enforce source-grounded responses?** The core design constraint is that the AI should never produce an answer it can't trace back to a specific uploaded document. This makes the system trustworthy for academic use — professors can verify that the AI is teaching what they taught.
+
+## Project structure
+
+```
+classmind/
+├── backend/
+│   ├── app.py              # FastAPI application + routes
+│   ├── ingest.py           # PDF chunking + embedding pipeline
+│   ├── requirements.txt
+│   └── .env.example
+├── frontend/
+│   ├── pages/              # Next.js pages
+│   ├── components/         # UI components
+│   └── ...
+├── db/                     # ChromaDB persistent storage
+├── .gitignore
+└── README.md
+```
+
+## Local setup
+
+### Prerequisites
+- Python 3.10+
+- Node.js 18+
+- [Ollama](https://ollama.com/) installed and running
+
+### Backend
+
 ```bash
 cd backend
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env
-```
-
-2. Start backend:
-```bash
-cd backend
+# Edit .env: set TEACHER_USER and TEACHER_PASS for bootstrap admin account
 uvicorn app:app --reload
 ```
 
-3. Start frontend:
+### Frontend
+
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
 
-## Auth Endpoints
-- `POST /auth/register` body: `{ "username", "password", "role", "invite_code?" }`
-- `POST /auth/login` body: `{ "username", "password" }`
-- `GET /auth/me` with `Authorization: Bearer <token>`
-
-## Role Behavior
-- Students and teachers can call `POST /chat` (token required).
-- Only teachers can call `POST /admin/ingest`.
-- If `TEACHER_INVITE_CODE` is set in backend `.env`, teacher registration requires it.
-
-## Bootstrap Teacher
-Set these in `backend/.env` and restart backend:
-- `TEACHER_USER`
-- `TEACHER_PASS`
-
-On startup, backend creates the teacher account if it does not already exist.
-
-## Upload + Ingest Verification
-Run backend and watcher:
+### Ingest course materials
 
 ```bash
-uvicorn backend.app:app --reload --host 127.0.0.1 --port 8000
+# Start the ingestion watcher
 python3 backend/ingest.py
-```
 
-Upload via curl (teacher token required):
-
-```bash
+# Upload a PDF (requires teacher auth token)
 curl -H "Authorization: Bearer $TOKEN" \
-  -F "file=@/path/AI_Class_Sample_Material.pdf" \
+  -F "file=@/path/to/lecture.pdf" \
   http://127.0.0.1:8000/admin/upload
 ```
 
-Force manual ingest:
+## API overview
 
-```bash
-curl -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-  -d '{"path":"docs/AI_Class_Sample_Material.pdf","force":true}' \
-  http://127.0.0.1:8000/admin/ingest
-```
+| Endpoint | Method | Auth | Description |
+|----------|--------|------|-------------|
+| `/auth/register` | POST | None | Register (student or teacher) |
+| `/auth/login` | POST | None | Login, returns JWT |
+| `/auth/me` | GET | Bearer | Get current user info |
+| `/chat` | POST | Bearer | Ask a question (student or teacher) |
+| `/admin/upload` | POST | Teacher | Upload course PDF |
+| `/admin/ingest` | POST | Teacher | Trigger manual ingestion |
 
-Check Chroma count:
+Teacher registration requires an invite code if `TEACHER_INVITE_CODE` is set in the backend `.env`.
 
-```bash
-python3 - <<'PY'
-import chromadb, os
-c = chromadb.PersistentClient(path=os.getenv("DB_DIR","db"))
-print(c.get_or_create_collection("documents").count())
-PY
-```
+## What I'd build next
+
+- Citation highlighting: show which exact PDF passage the answer came from
+- Multi-course support: one ClassMind instance serving multiple classes with isolated vector stores
+- Confidence scoring: surface retrieval similarity scores so students know how well-matched the answer is
+- Containerized deployment: Docker Compose for one-command university-wide setup
+- Analytics dashboard: show professors which topics students ask about most
+
+## Built by
+
+**Aarogya Gyawali** — CS student at San Francisco Bay University
+- [GitHub](https://github.com/arogya-gyawali)
+- [LinkedIn](https://linkedin.com/in/aarogya-gyawali-8603b8210)
+
+Built at ThinkNext Hackathon 2026.
